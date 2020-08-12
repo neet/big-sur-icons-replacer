@@ -1,23 +1,14 @@
 #!/usr/bin/env node
-import fs from "fs";
 import path from "path";
-import { Presets, SingleBar } from 'cli-progress';
+import { Presets, SingleBar } from "cli-progress";
 import yargs from "yargs";
 import chalk from "chalk";
-import { exec } from "child_process";
-import {
-  readAllInstalledApps,
-  normalizeAppFilename,
-  normalizeBSIRFilename,
-} from "./utils";
 
-interface BSIRIcon {
-  filename: string;
-  path: string;
-  appName: string;
-}
+import { IconRepositoryImpl, IIconRepository } from "./icon-repository";
+import { AppRepositoryImpl, IAppRepository } from "./app-repository";
 
 yargs
+
   .command(
     "replace-all",
     "Replace icons of all existing apps",
@@ -26,56 +17,41 @@ yargs
         description: "Directory for macOS_Big_Sur_icons_replacements",
         type: "string",
         required: true,
+        alias: "d",
       }),
     async ({ dir }) => {
-      const apps = readAllInstalledApps().map((app) =>
-        normalizeAppFilename(app)
-      );
+      const appRepository: IAppRepository = new AppRepositoryImpl();
+      const iconRepository: IIconRepository = new IconRepositoryImpl(path.resolve(dir));
 
-      const iconsDir =path.resolve(dir, "icons");
-      const replacements: BSIRIcon[] = fs
-        .readdirSync(iconsDir)
-        .map((filename) => ({
-          filename,
-          path: path.join(iconsDir, filename),
-          appName: normalizeBSIRFilename(filename),
-        }));
+      const apps = await appRepository.fetchAll();
+      const icons = await iconRepository.fetchAll();
 
+      const replacableApps = apps.filter((app) => {
+        return icons.map((icon) => icon.appName).includes(app.appName);
+      })
 
-      const supportedApps = replacements.map((bsir) => bsir.appName);
-      const replacableApps = apps.filter((app) => supportedApps.includes(app));
       const singleBar = new SingleBar(
-        { clearOnComplete: true,  },
-        Presets.shades_classic,
+        { clearOnComplete: true },
+        Presets.shades_classic
       );
       singleBar.start(replacableApps.length, 0);
 
       let i = 0;
 
       for (const app of replacableApps) {
-        const bsir = replacements.find(
-          (replacement) => replacement.appName === app
-        );
-        if (bsir == null) continue;
+        const icon = await iconRepository.find(app.appName);
+        if (icon == null) continue;
 
         try {
-          await new Promise((resolve, reject) => {
-            const appPath = path.join('/Applications', app + '.app');
-            exec(`yarn run fileicon set "${appPath}" ${bsir.path}`, (error) => {
-              if (error != null) reject(error);
-              resolve();
-            });
-          });
+          await app.setIcon(icon.path);
         } catch(error) {
-          console.error(error)
+          console.warn(error);
         }
-
         singleBar.update(i++);
       }
 
       singleBar.stop();
-      console.log('Successfully set icons');
-      process.exit(0);
+      console.log(chalk.green(`Successfully set ${replacableApps.length} icons`));
     }
   )
   .command(
@@ -92,22 +68,26 @@ yargs
           description: "Directory for macOS_Big_Sur_icons_replacements",
           type: "string",
           required: true,
+          alias: "d",
         }),
-    async ({ app, dir }) => {
-      const iconsDir = path.resolve(dir, "icons");
-      const replacement= fs
-        .readdirSync(iconsDir)
-        .map((filename): BSIRIcon => ({
-          filename,
-          path: path.join(iconsDir, filename),
-          appName: normalizeBSIRFilename(filename),
-        }))
-        .find((bsir) => bsir.appName === app);
-      
-      console.log(replacement);
-      if (replacement == null) return;
+    async ({ app: appName, dir }) => {
+      const appRepository: IAppRepository = new AppRepositoryImpl();
+      const iconRepository: IIconRepository = new IconRepositoryImpl(path.resolve(dir)) 
 
-      exec(`yarn run fileicon set ${path.join('/Applications', app + ".app")} ${replacement.path}`);
+      const app = await appRepository.find(appName);
+      if (app == null) {
+        console.error(chalk.red(`No App for ${appName} found`));
+        return;
+      }
+
+      const icon = await iconRepository.find(appName);
+      if (icon == null) {
+        console.error(chalk.red(`No Icon for ${appName} found`));
+        return;
+      }
+
+      app.setIcon(icon.path);
+      console.log(chalk.green(`Successfully set icon for ${appName}`));
     }
   )
   .command(
@@ -119,41 +99,41 @@ yargs
         type: "string",
         required: true,
       }),
-    async ({ app }) => {
-      const appPath = path.join("/Applications", app + ".app");
-      console.log(`Removing icon override for ${appPath}`)
-      exec(`yarn run fileicon rm ${appPath}`);
-    }
-  )
-  .command('revert-all', 'Revert all icons', {}, async() => {
-      const apps = fs.readdirSync('/Applications').filter(name => name.match(/\.app$/));
-      const singleBar = new SingleBar(
-        { clearOnComplete: true,  },
-        Presets.shades_classic,
-      )
+    async ({ app: appName }) => {
+      const appRepository: IAppRepository = new AppRepositoryImpl();
+      const app = await appRepository.find(appName);
 
-      singleBar.start(apps.length, 0);
-
-      let i = 0;
-
-      for (const app of apps) {
-        const appPath = path.join('/Applications', app);
-
-        try {
-          await new Promise((resolve, reject) => {
-            exec(`yarn run fileicon rm "${appPath}"`, (error) => {
-              if (error != null) reject(error);
-              resolve();
-            });
-          });
-        } catch (error) {
-          console.error(error);
-        }
-
-        singleBar.update(i++);
+      if (app == null) {
+        console.error(chalk.red(`No Icon for ${appName} found`));
+        return;
       }
 
-      singleBar.stop();
-      console.log('Successfully removed icons');
-      process.exit(0);
+      await app.removeIcon();
+      console.log(chalk.green(`Successfully removed icon for ${appName}`));
+    }
+  )
+  .command("revert-all", "Revert all icons", {}, async () => {
+    const appRepository: IAppRepository = new AppRepositoryImpl();
+    const apps = await appRepository.fetchAll();
+
+    const singleBar = new SingleBar(
+      { clearOnComplete: true },
+      Presets.shades_classic
+    );
+
+    singleBar.start(apps.length, 0);
+
+    let i = 0;
+
+    for (const app of apps) {
+      try {
+        await app.removeIcon();
+      } catch(error) {
+        console.warn(error);
+      }
+      singleBar.update(i++);
+    }
+
+    singleBar.stop();
+    console.log(chalk.green(`Successfully removed ${apps.length} icons`));
   }).argv;
