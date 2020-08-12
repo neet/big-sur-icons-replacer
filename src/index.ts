@@ -8,7 +8,6 @@ import { IconRepositoryImpl, IIconRepository } from "./icon-repository";
 import { AppRepositoryImpl, IAppRepository } from "./app-repository";
 
 yargs
-
   .command(
     "replace-all",
     "Replace icons of all existing apps",

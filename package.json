@@ -1,18 +1,25 @@
 {
   "name": "big-sur-icons-replacer",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "./dist/index.js",
   "repository": "https://github.com/neet/big-sur-icons-replacer.git",
   "author": "Ryo Igarashi <n33t5hin@gmail.com>",
   "license": "MIT",
+  "bin": {
+    "replacer": "./dist/index.js"
+  },
+  "scripts": {
+    "start": "./dist/index.js",
+    "build": "tsc"
+  },
   "devDependencies": {
     "@types/node": "^14.0.27",
     "@types/yargs": "^15.0.5",
+    "@types/cli-progress": "^3.7.0",
     "typescript": "^3.9.7",
     "yargs": "^15.4.1"
   },
   "dependencies": {
-    "@types/cli-progress": "^3.7.0",
     "chalk": "^4.1.0",
     "cli-progress": "^3.8.2",
     "fileicon": "^0.2.4"
