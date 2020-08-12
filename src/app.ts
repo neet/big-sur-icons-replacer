@@ -15,7 +15,7 @@ export class App {
 
   /** Normalized App name e.g. Finder */
   get appName() {
-    return this.path.replace(/\.app$/, '');
+    return this.fileName.replace(/\.app$/, '');
   }
 
   async setIcon(iconPath: string): Promise<void> {
