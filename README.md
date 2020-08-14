@@ -13,6 +13,12 @@ git clone https://github.com/neet/big-sur-icons-replacer.git
 cd ./big-sur-icons-replacer
 ```
 
+Install dependencies
+
+```
+yarn
+```
+
 Build the CLI:
 
 ```
