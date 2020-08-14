@@ -68,8 +68,13 @@ yargs
           type: "string",
           required: true,
           alias: "d",
+        })
+        .option("icon", {
+          description: "Name of icon to use",
+          type: "string",
+          alias: "i",
         }),
-    async ({ app: appName, dir }) => {
+    async ({ app: appName, dir, icon: iconName = appName }) => {
       const appRepository: IAppRepository = new AppRepositoryImpl();
       const iconRepository: IIconRepository = new IconRepositoryImpl(path.resolve(dir)) 
 
@@ -79,14 +84,14 @@ yargs
         return;
       }
 
-      const icon = await iconRepository.find(appName);
+      const icon = await iconRepository.find(iconName);
       if (icon == null) {
-        console.error(chalk.red(`No Icon for ${appName} found`));
+        console.error(chalk.red(`No Icon for ${iconName} found`));
         return;
       }
 
-      app.setIcon(icon.path);
-      console.log(chalk.green(`Successfully set icon for ${appName}`));
+      await app.setIcon(icon.path);
+      console.log(chalk.green(`Successfully set icon for ${iconName}`));
     }
   )
   .command(
